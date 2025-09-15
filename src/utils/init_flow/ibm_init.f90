@@ -196,6 +196,7 @@ subroutine ibm_init_levelset
   use string
   use math
   use grid_levelset
+  use ibm
 
   implicit none
 
@@ -252,6 +253,15 @@ subroutine ibm_init_levelset
         levelset(i,1) = distance
 
      end do
+
+     ! Set IBM object data for i/o
+     nObjects = 1
+     allocate(object(nObjects))
+     object(1)%volume = pi * R**2
+     object(1)%position = pos
+     object(1)%velocity = 0.0_WP
+     object(1)%angularVelocity = 0.0_WP
+     object(1)%remove = .false.
 
   case ('plate')
 
