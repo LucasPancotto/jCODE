@@ -225,8 +225,7 @@ contains
                   (ratioOfSpecificHeats - 1.0_WP) + 0.5_WP * rho_ *                          &
                   sum(velocity_(1:nDimensions)**2)
              do l = 1, nSpecies
-                localConservedVariables(nDimensions+2+l) = rho_ *                            &
-                     massFraction(gridIndex2, l)
+                localTargetState(nDimensions+2+l) = rho_ * massFraction(gridIndex2, l)
              end do
              
              localConservedVariables = conservedVariables(gridIndex,:)
