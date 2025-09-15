@@ -1,0 +1,64 @@
+# ---- jCODE Makefile.in (updated for Ubuntu 24 + MPICH 13.3) by ECP Breard ----
+
+# Directories
+HOMEDIR = $(shell pwd | sed -e 's/\/src.*//')
+LIBDIR  = $(HOMEDIR)/lib
+MODDIR  = $(HOMEDIR)/mod
+OBJDIR  = $(HOMEDIR)/obj
+BINDIR  = $(HOMEDIR)/bin
+VPATH   = $(LIBDIR) $(BINDIR) $(OBJDIR)
+
+# Compiler and archiver
+CC   = /usr/bin/mpicc
+CXX  = /usr/bin/mpicxx
+F90  = /usr/bin/mpif90
+F77  = /usr/bin/mpif77
+# Include LDFLAGS here so that sub‑makes inherit the linker flags (e.g. -fno-lto)
+LD   = /usr/bin/mpif90 $(LDFLAGS)
+AR   = ar rcv
+RL   = ranlib
+
+# Preprocessing options
+# OPTIONS = -DUSE_FFTW
+
+# MPI include directory for mpif.h (provided by libmpich-dev on Ubuntu)
+MPI_INC = /usr/lib/x86_64-linux-gnu/mpich/include
+
+# Compiler flags
+CFLAGS   =
+# Base Fortran flags: enable GNU extensions, unlimited line length, C preprocessor,
+# allow legacy argument mismatches, and include the MPICH headers.
+F90FLAGS = -std=gnu -ffree-line-length-0 -cpp -fallow-argument-mismatch -I$(MPI_INC) $(OPTIONS)
+F77FLAGS = -std=legacy
+
+# Linker flags (empty by default; append additional flags as needed)
+LDFLAGS  =
+
+# Module and include flags for Fortran modules
+INCFLAGS = -I$(MODDIR)
+MODFLAGS = -J $(MODDIR)
+
+# Disable link-time optimisation.  MPICH 4.2 on Ubuntu 24 enables LTO by default,
+# which can cause "multiple prevailing defs" errors when static libraries are linked
+# more than once.  Appending -fno-lto to both the compile and link flags avoids
+# these linker-plugin issues.
+F90FLAGS += -fno-lto
+LDFLAGS  += -fno-lto
+
+# Debug and optimisation flags
+#   DBGFLAGS: conservative optimisations for debugging, with runtime checking
+#   OPTFLAGS: aggressive optimisations for production use
+DBGFLAGS = -O0 -fbacktrace -Wall -Wextra -Waliasing -Wno-unused-dummy-argument -Wno-unused-parameter -ffree-line-length-none -fall-intrinsics -fcheck=all -g
+OPTFLAGS = -O3 -ftree-vectorize -ffast-math -funroll-loops -fomit-frame-pointer -pipe
+# Uncomment the following line to tune for the host CPU; use only when building
+# and running on the same machine
+# OPTFLAGS += -march=native
+
+# External libraries (set these if linking against optional packages such as FFTW)
+FFTW_DIR =
+FFTW_INC =
+FFTW_LIB =
+
+# Installation script
+INSTDIR  = $(HOME)/bin
+INSTSCPT = cp $(BINDIR)/* $(INSTDIR)/.
