@@ -26,8 +26,9 @@ module grid_patch
        SLIP_BC               = 13,                                                           &
        ISOTHERMAL_BC         = 14,                                                           &
        EXCITATION_PATCH      = 15,                                                           &
-       STATISTICS_PATCH      = 16
-
+       STATISTICS_PATCH      = 16,                                                           &
+       ACQUIRE_SUBREGION     = 17                   
+     
   type :: t_Patch
      character(len = str_medium) :: name
      integer :: patchType, normalDirection, iMin, iMax, jMin, jMax, kMin, kMax,              &
@@ -884,6 +885,8 @@ subroutine grid_patch_setup
 
      case ('STATISTICS')
         patches(i)%patchType = STATISTICS_PATCH
+     case ('ACQUIRE_SUBREGION')
+        patches(i)%patchType = ACQUIRE_SUBREGION 
 
      case default
         call die("grid_patch_setup: Unknown patch type '" //trim(patchType) // "'!")

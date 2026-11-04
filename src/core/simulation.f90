@@ -11,6 +11,7 @@ module simulation
   use state
   use time_info
   use particle
+  use acquisition
 
   implicit none
 
@@ -80,6 +81,9 @@ subroutine simulation_setup
   ! Setup the solver
   call solver_setup
 
+  !Setup the acquisition 
+  call acquisition_setup(.false.) 
+
   return
 end subroutine simulation_setup
 
@@ -102,6 +106,7 @@ subroutine simulation_cleanup
   call state_cleanup
   call particle_cleanup
   call solver_options_cleanup
+  call acquisition_cleanup
 
   return
 end subroutine simulation_cleanup

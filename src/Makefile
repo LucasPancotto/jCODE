@@ -2,8 +2,8 @@ include Makefile.in
 
 # Files
 CODE = jcode
-MODULES = library config operator grid state boundary sources combustion particle ibm controller functional postprocess core gradient monitor
-LIBRARIES = core postprocess gradient functional controller ibm particle combustion boundary state sources grid operator config monitor library
+MODULES = library config operator grid state boundary sources combustion particle ibm controller functional postprocess acquisition core gradient monitor
+LIBRARIES = core postprocess gradient functional controller ibm particle combustion boundary state sources grid operator config monitor library acquisition
 
 # Targets
 
