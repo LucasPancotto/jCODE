@@ -8,7 +8,7 @@ module ibm_solver
 
   ! Global variables
   logical :: ibm_collisions, collisionWall(3,2)
-  real(WP) :: ibmDensity, coefficientOfRestitution, coefficientOfFriction, collisionTime
+  real(WP) :: ibmDensity, coefficientOfRestitution, coefficientOfFriction, collisionTime, radiusOfInfluence, wallGridSpacing(3,2)
 
 end module ibm_solver
 
@@ -25,12 +25,15 @@ subroutine ibm_solver_setup
   use parser
   use parallel
   use geometry
-  
+  use grid
+  use time_info, only : timestepSize                                                                                                   
+
   implicit none
 
   ! Local variables
   logical :: wall
-
+  integer :: n
+  
   ! Read in density
   if (ibm_move) call parser_read('ibm density', ibmDensity)
 
@@ -41,7 +44,8 @@ subroutine ibm_solver_setup
      ! Get the collision parameters
      call parser_read('coefficient of restitution', coefficientOfRestitution, 0.85_WP)
      call parser_read('coefficient of friction', coefficientOfFriction, 0.1_WP)
-     call parser_read('collision time', collisionTime)
+     call parser_read('collision time', collisionTime, 20_WP*timestepSize)
+     call parser_read('radius of influence', radiusOfInfluence, minGridSpacing)
 
      ! Check for walls
      collisionWall = .false.
@@ -51,6 +55,15 @@ subroutine ibm_solver_setup
      if (wall) collisionWall(2,:) = .true.
      call parser_read('ibm wall in z', wall, .false.)
      if (wall) collisionWall(3,:) = .true.
+
+     ! Get grid spacing at wall processors
+     wallGridSpacing = 0.0_WP
+     do n = 1, nDimensions
+          if (iStart(n) .eq. 1) wallGridSpacing(n,1) = gridSpacing(1,n)
+          if (iEnd(n) .eq. globalGridSize(n)) wallGridSpacing(n,2) = gridSpacing(nGridPoints,n)
+          call parallel_max(wallGridSpacing(n,1))
+          call parallel_max(wallGridSpacing(n,2))
+     end do
   else
      collisionWall = .false.
   end if
@@ -118,6 +131,8 @@ subroutine ibm_solver_rhs
      object(i)%dudt(1:nDimensions) = (object(i)%pForce(1:nDimensions) +                      &
           object(i)%vForce(1:nDimensions)) / mass
 
+     print*, 'iRank =', iRank, 'object(i)%cForce(1:nDimensions) = ', object(i)%cForce(1:nDimensions)
+
      ! Collisions
      object(i)%dudt(1:nDimensions) = object(i)%dudt(1:nDimensions) +                         &
           object(i)%cForce(1:nDimensions) / mass
@@ -153,6 +168,7 @@ subroutine compute_ibm_collisions
   use geometry
   use grid
   use grid_functions
+  use parallel, only : iRank
   use time_info, only : timestepSize
 
   implicit none
@@ -160,7 +176,7 @@ subroutine compute_ibm_collisions
   ! Local variables
   integer :: ip, jp, n, gridIndex
   real(WP), parameter :: oneSixth = 1.0_WP / 6.0_WP
-  real(WP) :: d1, d2, mass1, mass2, objectSeparation, radiusOfInfluence, delta, rtv,         &
+  real(WP) :: d1, d2, mass1, mass2, objectSeparation, delta, rtv,         &
        effectiveMass, springForce, damper
   real(WP), dimension(3) :: dist, pos1, pos2, vel1, vel2, vel12, omega1, omega2,             &
        n12, v12n, t12, normalForce, tangentialForce
@@ -171,7 +187,8 @@ subroutine compute_ibm_collisions
   if (ibmType.ne.IBM_PARTICLE) return
 
   ! Set collision time to be 20x the simulation timestep
-  collisionTime = 20.0_WP * timestepSize
+  ! collisionTime = 20.0_WP * timestepSize
+  ! collisionTime is now a global variable declared in input file
 
   ! Implement the collision term
   do ip = 1, nObjects
@@ -197,11 +214,13 @@ subroutine compute_ibm_collisions
 
         ! Check collisions with left wall
         if (collisionWall(n,1)) then
-           gridIndex = iStart(1) - gridOffset(1) + localGridSize(1) *                        &
-                (iStart(2) - 1 - gridOffset(2) + localGridSize(2) *                          &
-                (iStart(3) - 1 - gridOffset(3)))
+           !gridIndex = iStart(1) - gridOffset(1) + localGridSize(1) *                        &
+           !     (iStart(2) - 1 - gridOffset(2) + localGridSize(2) *                          &
+           !     (iStart(3) - 1 - gridOffset(3)))
            pos2 = pos1
-           pos2(n) = coordinates(gridIndex, n)
+           ! we assume the position of the wall is the processor boundary on the left
+           !pos2(n) = coordinates(gridIndex, n)
+           pos2(n) = domainExtent(n,1) ! global domain extent
 
            ! Distance between particle and wall
            dist = pos2 - pos1
@@ -209,7 +228,12 @@ subroutine compute_ibm_collisions
            objectSeparation = sqrt(sum(dist**2))
 
            ! Particle-wall radius of influence
-           radiusOfInfluence = gridSpacing(gridIndex, n)
+           ! radiusOfInfluence = gridSpacing(gridIndex, n)
+           ! radiusOfInfluence = wallGridSpacing(n,1)
+	   ! radiusOfInfluence is now a global variable declared in input file
+           print*, '--------------------------------------------------------------------------------'
+           print*, 'iRank =', iRank, ' dimension =', n, ' pos2(n) =', pos2(n),                &
+               ' radiusOfInfluence =', radiusOfInfluence, 'collisionTime = ', collisionTime,'dist = ' , dist
 
            ! Distance of influence
            delta = 0.5_WP * d1 + radiusOfInfluence - objectSeparation
@@ -254,26 +278,28 @@ subroutine compute_ibm_collisions
 
         ! Check collisions with right wall
         if (collisionWall(n,2)) then
-           gridIndex = iEnd(1) - gridOffset(1) + localGridSize(1) *                          &
-                (iEnd(2) - 1 - gridOffset(2) + localGridSize(2) *                            &
-                (iEnd(3) - 1 - gridOffset(3)))
+           ! gridIndex = iEnd(1) - gridOffset(1) + localGridSize(1) *                          &
+           !      (iEnd(2) - 1 - gridOffset(2) + localGridSize(2) *                            &
+           !      (iEnd(3) - 1 - gridOffset(3)))
            pos2 = pos1
-           pos2(n) = coordinates(gridIndex, n)
-
+           ! pos2(n) = coordinates(gridIndex, n)
+           pos2(n) = domainExtent(n,2)
            ! Distance between particle and wall
            dist = pos2 - pos1
            call correct_periodic_distance(dist)
            objectSeparation = sqrt(sum(dist**2))
 
            ! Particle-wall radius of influence
-           radiusOfInfluence = gridSpacing(gridIndex, n)
-
+           ! radiusOfInfluence = gridSpacing(gridIndex, n)
+           ! radiusOfInfluence = wallGridSpacing(n,2)
+               
            ! Distance of influence
            delta = 0.5_WP * d1 + radiusOfInfluence - objectSeparation
            delta = min(delta, 2.0_WP * minGridSpacing)
 
            if (delta .gt. 0.0_WP) then
               ! Collision parameters
+              effectiveMass = mass1
               springForce = effectiveMass / collisionTime**2 * (pi**2 +                      &
                    log(coefficientOfRestitution)**2)
               damper = -2.0_WP * log(coefficientOfRestitution) *                             &
@@ -329,7 +355,7 @@ subroutine compute_ibm_collisions
         objectSeparation = sqrt(sum(dist**2))
 
         ! Set radius of influence based on grid spacing
-        radiusOfInfluence = sqrt(real(nDimensions, WP)) * minGridSpacing
+        ! radiusOfInfluence = sqrt(real(nDimensions, WP)) * minGridSpacing
 
         ! Distance of influence
         delta = 0.5_WP * (d1 + d2) + radiusOfInfluence - objectSeparation

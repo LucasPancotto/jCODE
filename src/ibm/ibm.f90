@@ -33,7 +33,7 @@ module ibm
   ! IBM parameters
   integer :: rigidBodyID
   logical :: ibm_move, use_ghost_points, ibm_slip, ibm_isothermal, ibm_rigid_motion,         &
-       correctCurvature
+       correctCurvature, search_local_levelset
   integer, dimension(:), allocatable :: objectIndex
   real(WP) :: ibmTemperature, ibmEpsilon
   real(WP), dimension(:,:), allocatable :: ibmVelocity, baselineLevelset
@@ -242,6 +242,10 @@ subroutine ibm_setup
      else
         call ibm_solver_setup
      end if
+     ! ---- LUCAS ------
+     ! 'search_local_levelset' added
+      call parser_read('search local levelset', search_local_levelset, .true.)
+     ! -----------------------------------------------
   end if
 
   ! Store baseline levelset in case multiple levelsets are used (from file and IBM objects)
@@ -340,7 +344,12 @@ end subroutine ibm_setup_objects
 ! ==================== !
 ! Compute the levelset !
 ! ==================== !
-subroutine ibm_compute_levelset
+!------ LUCAS -------
+! this routine needs to be able to compute the levelset across the current processor and it's neighbors
+! each gridpoint (i,j,k) should locate the closest IBM object center in the current proc and neighboring procs
+! --------------------------
+
+subroutine ibm_compute_levelset 
 
   ! Internal modules
   use ibm
@@ -371,7 +380,12 @@ subroutine ibm_compute_levelset
 
   case(IBM_PARTICLE)
 
-     if (ibm_move) then
+      !------ LUCAS ---------------------------------------------
+      ! Add option 'search_local_levelset'. When .true. the IBM object considered for levelset calculation 
+      ! are only the ones present in the local processor.
+      ! When .false. it uses all IBM objects present in the domain (accross processors).
+      ! ----------------------------------------------------------
+     if (ibm_move .and. search_local_levelset) then
         ! Localize IBM objects to processor to speed up levelset computation
         minCoords = minval(coordinates, 1)
         maxCoords = maxval(coordinates, 1)
@@ -409,9 +423,16 @@ subroutine ibm_compute_levelset
         end do
 
      else
-
+      !------ LUCAS ---------------------------------------------
+      ! this just takes all the objects present throughout the whole domain
+      ! and considers them for the levelset calculation :
+      ! we should use this for small nObjects
+      ! ----------------------------------------------------------
         ! Revert to full list
         nObjectsLocal = nObjects
+         ! print*,'----- QUANTITIES IN ibm.f90 : -----'
+         ! print*, 'nObjects                             : ', nObjects
+         ! print*, 'nObjectsLocal (over the whole domain): ', nObjectsLocal
         do n = 1, nObjects
            localObjectIndex(n) = n
         end do

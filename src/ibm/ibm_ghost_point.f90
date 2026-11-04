@@ -313,6 +313,11 @@ contains
     ! Local variables
     integer :: gridIndex, i, j, k
 
+   !  print*, 'preparing ghost arrays, processor limits: '
+   !  print*, 'iStart(3), iEnd(3) = ', iStart(3), iEnd(3)
+   !  print*, 'iStart(2), iEnd(2) = ', iStart(2), iEnd(2)
+   !  print*, 'iStart(1), iEnd(1) = ', iStart(1), iEnd(1)
+
     ! Get data belonging to local processor and pack in temporary array
     do k = iStart(3), iEnd(3)
        do j = iStart(2), iEnd(2)
@@ -874,9 +879,13 @@ subroutine ibm_ghost_point_correct_state(stateVector)
   if (ibm_move) then
      ibmVelocity = 0.0_WP
      r = 0.0_WP
+      ! print*,'----- QUANTITIES IN ibm_ghost_point.f90 : -----'
+      ! print*, 'nInteriorPoints : ', nInteriorPoints
      do j = 1, nInteriorPoints
         i = interiorIndex(j)
+         ! print*, 'interiorIndex(i) : ', interiorIndex(i)
         n = objectIndex(i)
+         ! print*, 'objectIndex(i) : ', objectIndex(i)
         r(1:nDimensions) = coordinates(i,:) - object(n)%position(1:nDimensions)
         call correct_periodic_distance(r)
         omegaR = cross_product(object(n)%angularVelocity, r)
@@ -980,16 +989,19 @@ subroutine ibm_filter_state(stateVector)
   integer :: i, j
   real(WP), dimension(:,:), allocatable :: filtered
   
-  ! Return of not used
+  ! Return if not used
   if (.not.useIBM .or. .not.filterIBM) return
 
   call timing_start('ibm')
 
+   ! filtered has the same size as stateVector
   allocate(filtered(nGridPoints, nUnknowns))
   filtered = stateVector
   do i = 1, nDimensions
+      ! apply a gaussian filter in each dimension
      call gaussian_filter_apply(i, filtered)
   end do
+  ! only replace stateVector with filtered values for interior points of the IBM
   do j = 1, nInteriorPoints
      i = interiorIndex(j)
      stateVector(i,:) = filtered(i,:)

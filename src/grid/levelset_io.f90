@@ -43,6 +43,9 @@ subroutine levelset_read_parallel(filename_)
   ! Check if there was an error opening the file
   if (ierror.ne.0) call die('Error reading ' // trim(filename_))
 
+  ! check file size 
+  ! call MPI_File_get_size(ifile, fileSize, ierror)   ! fileSize is integer(kind=MPI_OFFSET_KIND)
+
   ! Read dimensions from header
   call MPI_FILE_READ_ALL(ifile, dims, 4, MPI_INTEGER, status, ierror)
   if ((dims(1).ne.globalGridSize(1)) .or. (dims(2).ne.globalGridSize(2)) .or.                &

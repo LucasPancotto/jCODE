@@ -220,6 +220,7 @@ contains
     allocate(incomingJacobianOfInviscidFlux(nUnknowns, nUnknowns))
     incomingJacobianOfInviscidFlux = 0.0_WP
 
+
     do k = patch%iStart(3), patch%iEnd(3)
        do j = patch%iStart(2), patch%iEnd(2)
           do i = patch%iStart(1), patch%iEnd(1)

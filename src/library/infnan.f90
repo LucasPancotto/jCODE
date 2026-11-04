@@ -10,15 +10,21 @@ module infnan
 
   ! Single precision IEEE values
   ! Leading bit for sNegInf should be 1. But does not compile!
-  integer(Single), parameter :: sNaN    = int(Z"7FC00000")
-  integer(Single), parameter :: sPosInf = int(Z"7F800000")
-  integer(Single), parameter :: sNegInf = int(Z"7F800000")
+  ! integer(Single), parameter :: sNaN    = int(Z"7FC00000")
+  ! integer(Single), parameter :: sPosInf = int(Z"7F800000")
+  ! integer(Single), parameter :: sNegInf = int(Z"7F800000")
+  integer(Single), parameter :: sNaN    = int(Z"7FC00000", kind=Single)
+  integer(Single), parameter :: sPosInf = int(Z"7F800000", kind=Single)
+  integer(Single), parameter :: sNegInf = int(Z"7F800000", kind=Single)
 
   ! Double precision IEEE values
   ! Leading bit for dNegInf should be 1. But does not compile!
-  integer(Double), parameter :: dNaN    = int(Z"7FF8000000000000")
-  integer(Double), parameter :: dPosInf = int(Z"7FF0000000000000")
-  integer(Double), parameter :: dNegInf = int(Z"7FF0000000000000")
+  ! integer(Double), parameter :: dNaN    = int(Z"7FF8000000000000")
+  ! integer(Double), parameter :: dPosInf = int(Z"7FF0000000000000")
+  ! integer(Double), parameter :: dNegInf = int(Z"7FF0000000000000")
+  integer(Double), parameter :: dNaN    = int(Z"7FF8000000000000", kind=Double)
+  integer(Double), parameter :: dPosInf = int(Z"7FF0000000000000", kind=Double)
+  integer(Double), parameter :: dNegInf = int(Z"7FF0000000000000", kind=Double)
 
   ! Location of single and double precision sign bit (Intel)
   ! Subtract one because bit numbering starts at zero

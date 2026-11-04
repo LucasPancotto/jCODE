@@ -658,6 +658,7 @@ subroutine adiabatic_setup
   ! Find the number of boundaries of this type
   nAdiabaticWalls = 0; j = 0
   do i = 1, nPatches
+   
      if (patches(i)%patchType .eq. SAT_ADIABATIC_WALL) then
         nAdiabaticWalls = nAdiabaticWalls + 1
         if (j .eq. 0) j = i
