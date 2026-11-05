@@ -10,14 +10,14 @@ module acquisition
 
   real(WP),allocatable,dimension(:,:) :: acqData
   real(WP),allocatable,dimension(:) :: acqTime
-  type(t_Patch), pointer :: acqPatch
+  type(t_Patch), pointer :: acqPatch => null()
   integer :: acqSubarrayType, acqLocalSize(3), acqGlobalSize(3),acqOffset(3),               &
-  nacqPoints, nacqPointsGlobal,acqComm, acqRoot
-  integer::currentStep
-  integer::nSteps
-  integer::startIter
-  integer::stopIter
-  integer::skipIter
+  nacqPoints = 0, nacqPointsGlobal = 0, acqComm = MPI_COMM_NULL, acqRoot = -1
+  integer :: currentStep = 1
+  integer :: nSteps
+  integer :: startIter
+  integer :: stopIter
+  integer :: skipIter
 
 end module acquisition
 
@@ -39,19 +39,19 @@ subroutine acquisition_setup(debug)
   integer :: starts(3), extent(6)
   real(WP), allocatable :: buffer_WP(:,:)
   integer :: ierror
-  logical,optional::debug
+  logical, intent(in) :: debug
 
    ! Connect the acquisition patch if there is one
   do i = 1, nPatches
      if (patches(i)%patchType .eq. ACQUIRE_SUBREGION) then
-        allocate(acqPatch)
+        ! allocate(acqPatch)
         acqPatch => patches(i)
         exit
       end if
   end do
 
   if (.not. associated(acqPatch)) then
-    print *,"No ACQUIRE_SUBREGION patch exists: Exiting"
+     if (iRank .eq. iRoot) print *, "No ACQUIRE_SUBREGION patch found: acquisition disabled"
     return
   end if
 
@@ -69,17 +69,17 @@ subroutine acquisition_setup(debug)
 
   call parser_read('acquire subregion start', startIter, 0)
   call parser_read('acquire subregion stop', stopIter, 0)
-  call parser_read('acquire subregion skip', skipIter, 0)
-  nSteps=abs(startIter-stopIter)/skipIter+1
+  call parser_read('acquire subregion skip', skipIter, 1)
+  if (skipIter .lt. 1) call die('acquisition_setup: "acquire subregion skip" must be >= 1')
+  if (stopIter .lt. startIter) call die('acquisition_setup: "acquire subregion stop" must be >= "start"')
+  nSteps = (stopIter - startIter) / skipIter + 1
 
-  if (.not. present(debug)) debug=.false.
-  if (debug) then
-     print *,"acquire subregion start: ",startIter
-     print *,"acquire subregion start: ",stopIter
-     print *,"acquire subregion start: ",skipIter
-     print *,"total steps: ",nSteps
+  if (debug .and. iRank .eq. iRoot) then
+     print *, "acquire subregion start: ", startIter
+     print *, "acquire subregion stop:  ", stopIter
+     print *, "acquire subregion skip:  ", skipIter
+     print *, "total steps: ", nSteps
   end if
-
 
   if ( nAcqPoints .gt. 0) then
      if (associated(acqPatch)) then
@@ -124,42 +124,28 @@ use time_info
 
 implicit none
 
-real(WP),dimension(nGridPoints,1)::tmp
+! real(WP),dimension(nGridPoints,1)::tmp
+real(WP), allocatable :: tmp(:)
 
-  if (iRank .eq. acqRoot) then
-    acqTime(currentStep)=time
-  end if
+! Ranks with no patch points (or no patch at all) have nothing to do
+if (.not. associated(acqPatch)) return
+if (nAcqPoints .eq. 0) return
 
-if (.not. associated(acqPatch)) then
-    return
-end if
+! Sample only inside [start, stop], every skip steps
+if (timestep .lt. startIter .or. timestep .gt. stopIter) return
+if (mod(timestep - startIter, skipIter) .ne. 0) return
 
-if (timestep .ge. startIter .and. timestep .le. stopIter) then
- if (mod(timestep-startIter,skipIter) .eq. 0) then
+! Never write past the arrays sized in acquisition_setup
+if (currentStep .gt. nSteps) return
 
-! ------------------------------------------------------------------------------------------
-! LUCAS: in this version of jCODE  variables 'forwardMode' and 'baseState' do not exist
-! only consider NONLINEAR case, with conserved variables as is
-! select case (trim(forwardMode))
-!       case ('LINEARIZED')
-!        call compute_dependent_variables(conservedVariables+baseState,pressure=tmp(:,1))
-!       case ('NONLINEAR')
-!        call compute_dependent_variables(conservedVariables,pressure=tmp(:,1))    
-!  end select
+allocate(tmp(nGridPoints)) ! NOTE : this only returns pressure this way
+call compute_dependent_variables(conservedVariables,pressure=tmp)    
+call patch_collect(acqPatch, tmp, acqData(:,currentStep))
 
-  ! LUCAS only consider NONLINEAR case, with conserved variables as is
-  call compute_dependent_variables(conservedVariables,pressure=tmp(:,1))    
-! ------------------------------------------------------------------------------------------
+if (iRank .eq. acqRoot) acqTime(currentStep) = time
+deallocate(tmp)
 
-  if (nAcqPoints .eq. 0) return
-
-  if (associated(acqPatch)) then
-   call patch_collect(acqPatch, tmp(:,1), acqData(:,currentStep))
-  end if
-  currentStep=currentStep+1 !incrementcurrentStep=currentStep+1 !increment
- end if
-end if
-
+currentStep=currentStep+1
 
 end subroutine
 
@@ -196,6 +182,7 @@ subroutine acquisition_cleanup
     ! Open the file to write
     inquire(file = filename, exist = fileIsThere)
     if (fileIsThere .and. irank.eq.iroot) call MPI_FILE_DELETE(filename, mpiInfo, ierror)
+    call MPI_BARRIER(acqComm, ierror)
     call MPI_FILE_OPEN(acqComm, filename, IOR(MPI_MODE_WRONLY, MPI_MODE_CREATE), mpiInfo,         &
        iunit, ierror)
 
@@ -229,9 +216,11 @@ subroutine acquisition_cleanup
 
     ! Close the file.
     call MPI_FILE_CLOSE(iunit, ierror)
-
+    call MPI_TYPE_FREE(acqSubarrayType, ierror)
+    
   !delete data structures
   if (allocated(acqData)) deallocate(acqData)
+  if (allocated(acqTime)) deallocate(acqTime)
 
   return
 end subroutine acquisition_cleanup

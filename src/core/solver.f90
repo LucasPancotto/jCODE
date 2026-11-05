@@ -255,7 +255,7 @@ contains
 
     ! Monitor the initial data
     call monitor_timestep(ADJOINT, controlIteration_)
-    call acquire_data(ADJOINT)
+    ! call acquire_data(ADJOINT)
 
     do i = startTimestep + sign(1, timemarchDirection),                                      &
          startTimestep + sign(adjointIterations, timemarchDirection), timemarchDirection
@@ -307,7 +307,7 @@ contains
 
        ! Monitor the current timestep
        call monitor_timestep(ADJOINT, controlIteration_)
-    call acquire_data(ADJOINT)
+    ! call acquire_data(ADJOINT)
 
     end do
 
